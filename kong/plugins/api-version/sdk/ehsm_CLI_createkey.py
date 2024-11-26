@@ -1,11 +1,12 @@
 from ehsm import Client
+import os
 from ehsm.api.enums import KeySpec, Origin, KeyUsage
 
 client = Client(base_url="https://8.212.3.169:9000/ehsm", allow_insecure=True)
 
 appid = None  
 apikey = None  
-with open('/home/wydx/kong/kong/plugins/api-version/data/appid_apikey.txt', 'r') as file:  
+with open('/home/wydx/kong_coco/kong/plugins/api-version/data/appid_apikey.txt', 'r') as file:  
     # 读取文件的每一行  
     lines = file.readlines()  
     # 检查是否至少有两行内容  
@@ -20,3 +21,7 @@ result = client.create_key(
     KeySpec.EH_AES_GCM_128, Origin.EH_INTERNAL_KEY, KeyUsage.EH_KEYUSAGE_ENCRYPT_DECRYPT
 )
 print(result.keyid)
+
+# 获取当前的运行路径
+current_path = os.getcwd()
+print("当前运行路径:", current_path)

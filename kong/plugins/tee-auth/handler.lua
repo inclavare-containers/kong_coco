@@ -1,8 +1,8 @@
 local constants = require "kong.constants"
 local kong_meta = require "kong.meta"
-
-local ehsm = require "kong.plugins.key-auth-modified.ehsm"
-local cocoas = require "kong.plugins.key-auth-modified.cocoas"
+local http = require("socket.http")
+local ltn12 = require("ltn12")
+local json = require("cjson")
 
 local kong = kong
 local type = type
@@ -17,12 +17,10 @@ local HEADERS_CONSUMER_USERNAME     = constants.HEADERS.CONSUMER_USERNAME
 local HEADERS_CREDENTIAL_IDENTIFIER = constants.HEADERS.CREDENTIAL_IDENTIFIER
 local HEADERS_ANONYMOUS             = constants.HEADERS.ANONYMOUS
 
-
 local KeyAuthHandler = {
-  VERSION = kong_meta.version,
-  PRIORITY = 1250,
+  PRIORITY = 1000, -- set the plugin priority, which determines plugin execution order
+  VERSION = "0.1", -- version in X.Y.Z format. Check hybrid-mode compatibility requirements.
 }
-
 
 local EMPTY = {}
 
@@ -35,7 +33,6 @@ local ERR_NO_API_KEY          = { status = 401, message = "No API key found in r
 local ERR_INVALID_AUTH_CRED   = { status = 401, message = "Invalid authentication credentials" }
 local ERR_INVALID_PLUGIN_CONF = { status = 500, message = "Invalid plugin configuration" }
 local ERR_UNEXPECTED          = { status = 500, message = "An unexpected error occurred" }
-
 
 local function load_credential(key)
   local cred, err = kong.db.keyauth_credentials:select_by_key(key)
@@ -101,6 +98,18 @@ local function get_body()
   return body
 end
 
+local function tableToString(tbl)
+  local result = {}
+  for k, v in pairs(tbl) do
+    if type(v) == "table" then
+      v = tableToString(v)
+    else
+      v = tostring(v)
+    end
+    table.insert(result, string.format("%s = %s", k, v))
+  end
+  return "{" .. table.concat(result, ", ") .. "}"
+end
 
 local function do_authentication(conf)
   if type(conf.key_names) ~= "table" then
@@ -113,6 +122,14 @@ local function do_authentication(conf)
   local key
   local body
 
+  local tee = nil
+  for _, name in ipairs(conf.tee) do
+      v = headers[name]
+      if type(v) == "string" then
+        tee = v
+      end
+  end
+  
   -- search in headers & querystring
   for _, name in ipairs(conf.key_names) do
     local v
@@ -208,6 +225,59 @@ local function do_authentication(conf)
     return nil, ERR_UNEXPECTED
   end
 
+  -- start tee-auth
+
+  -- send curl
+  local url = "http://host.docker.internal:5000/attest"
+  local payload = string.format([[
+  {
+    "name": "%s",
+    "tee": "%s",
+    "evidence": "%s",
+    "attesttype": "call"
+  }
+  ]], consumer.username, tee, credential.key)
+  local response_body = {}
+  local res, code, response_headers = http.request{
+    url = url,
+    method = "POST",
+    headers = {
+      ["Content-Type"] = "application/json",
+      ["Content-Length"] = tostring(#payload)
+    },
+    source = ltn12.source.string(payload),
+    sink = ltn12.sink.table(response_body)
+  }
+
+  -- debug info
+  local request_data_full = {
+    name = tableToString(consumer),
+    tee = "sample", 
+    evidence = tableToString(credential),
+    attesttype = "call"
+  }
+  local request_data = {
+    name = consumer.username,
+    tee = "sample",
+    evidence = credential.key,
+    attesttype = "call"
+  }
+  local request_str = json.encode(request_data)
+
+  -- get response
+  local response_data = json.decode(table.concat(response_body))
+
+  local attest_result = false
+  if response_data and response_data.response_type == "attest_response" and response_data.result then
+    attest_result = response_data.result.attest_result or false
+  end
+
+  -- if attest fail
+  if not attest_result then
+    local ATTEST_FAIL = { status = 401, message = "request credential attest fail, request data: " .. request_str }
+    return nil, ATTEST_FAIL
+  end
+
   set_consumer(consumer, credential)
 
   return true
@@ -244,16 +314,7 @@ function KeyAuthHandler:access(conf)
       return kong.response.error(err.status, err.message, err.headers)
     end
   end
-
 end
 
--- runs in the 'header_filter_by_lua_block'
-function KeyAuthHandler:header_filter(plugin_conf)
-  -- ehsm.sdk_GenerateQuote(plugin_conf)
-  ehsm.test(plugin_conf)
-  -- ehsm.sdk_ListKey(plugin_conf)
-  -- cocoas.Verify(plugin_conf)
-  -- cocoas.empty(plugin_conf)
-end --]]
 
 return KeyAuthHandler

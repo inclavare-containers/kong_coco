@@ -41,3 +41,16 @@ bin/h2client
 *.wasm
 spec/fixtures/proxy_wasm_filters/build
 spec/fixtures/proxy_wasm_filters/target
+
+# kong_coco tmp file
+**/__pycache__/
+# servroot typically is the Kong working directory for tests
+servroot
+# exclude Pongo shell history
+.pongo/.bash_history
+# exclude LuaCov statistics file
+luacov.stats.out
+# exclude LuaCov report
+luacov.report.out
+# exclude Pongo containerid file
+.containerid

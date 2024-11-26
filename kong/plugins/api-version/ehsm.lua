@@ -1,10 +1,10 @@
-local table = require("table")  
-local math = require("math")  
-local string = require("string")  
-local socket = require("socket.http")  
+local table = require("table")
+local math = require("math")
+local string = require("string")
+local socket = require("socket.http")
 local ngx = ngx
 local time = ngx.time
-local base64 = require("base64")  
+-- local base64 = require("base64")
 -- local json = require("json")
 -- local hmac = require("hmac")  
 -- local url = require("url")  
@@ -66,9 +66,9 @@ end
 
 function ehsm.GetVersion(plugin_conf)
     -- 定义要执行的curl命令  
-    local curl_command = "curl --insecure https://8.212.3.169:9000/ehsm?Action=GetVersion"  
+    local curl_command = "curl --insecure https://8.212.3.169:9000/ehsm?Action=GetVersion"
     -- 使用io.popen执行curl命令并将输出打印到stdout  
-    local output = io.popen(curl_command):read("*all")  
+    local output = io.popen(curl_command):read("*all")
     kong.response.set_header(plugin_conf.ehsm_response_in_body, output)
 end
 
@@ -79,7 +79,7 @@ function ehsm.Enroll(plugin_conf)
         return nil, ERR_INVALID_PLUGIN_CONF
     end
     kong.response.set_header(plugin_conf.ehsm_response_in_body, "get ehsm_id from client success")
-    
+
     -- get headers
     local headers = kong.request.get_headers()
     local ehsm_id
@@ -101,25 +101,25 @@ function ehsm.Enroll(plugin_conf)
     -- kong.response.set_header(plugin_conf.ehsm_response_in_body, ehsm_id)
     
     -- 定义要执行的curl命令  
-    local curl_command = "curl --insecure https://8.212.3.169:9000/ehsm?Action=Enroll"  
+    local curl_command = "curl --insecure https://8.212.3.169:9000/ehsm?Action=Enroll"
     -- 使用io.popen执行curl命令并将输出打印到stdout  
-    local output = io.popen(curl_command):read("*all")  
+    local output = io.popen(curl_command):read("*all")
 
     -- 使用 Lua 的 string.find 和 string.sub 函数来提取 apikey 和 appid  
-    local apikey = output:match("apikey\":\"([^\"]*)")  
-    local appid = output:match("appid\":\"([^\"]*)")  
+    local apikey = output:match("apikey\":\"([^\"]*)")
+    local appid = output:match("appid\":\"([^\"]*)")
     -- kong.response.set_header(plugin_conf.ehsm_response_in_body, apikey)
     -- kong.response.set_header(plugin_conf.cocoas_response_in_body, appid)
     
     -- 使用数据库替代方案(本地存储)存储enroll密钥
     -- 打开文件  
-    local file = io.open("/home/wydx/kong/kong/plugins/api-version/data/appid_apikey.txt", "w")  
-    if file then  
+    local file = io.open("/home/wydx/kong/kong/plugins/api-version/data/appid_apikey.txt", "w")
+    if file then
         -- 写入数据  
         file:write(appid .. "\n")  -- 写入appid  
         file:write(apikey .. "\n") -- 写入apikey  
         -- 关闭文件  
-        file:close()  
+        file:close()
     end
     kong.response.set_header(plugin_conf.cocoas_response_in_body, "generate appid-apikey success")
 
@@ -144,23 +144,23 @@ function ehsm.Enroll(plugin_conf)
 end
 
 function ehsm.sdk_GenerateQuote(plugin_conf)
-    local cmd = "python3 /home/wydx/kong/kong/plugins/api-version/sdk/ehsm_CLI_generatequote.py"  
-    local quote = io.popen(cmd):read("*all")    
+    local cmd = "python3 /home/wydx/kong/kong/plugins/api-version/sdk/ehsm_CLI_generatequote.py"
+    local quote = io.popen(cmd):read("*all")
     quote = quote:gsub("\n", "") -- 移除quote字符串中所有的换行符  
     local SgxEvidence = '{"quote":"' .. quote .. '"}'
     encodedQuote = base64.encode(SgxEvidence)
     encodedQuote = encodedQuote:gsub("=", "")
     -- 打开文件  
-    local file = io.open("/home/wydx/kong/kong/plugins/api-version/data/restful-request.json", "w")  
-    if file then  
+    local file = io.open("/home/wydx/kong/kong/plugins/api-version/data/restful-request.json", "w")
+    if file then
         -- 写入数据  
-        file:write("{\n")  
-        file:write("    \"tee\": \"sgx\",\n")  
+        file:write("{\n")
+        file:write("    \"tee\": \"sgx\",\n")
         file:write("    \"evidence\": \"" .. encodedQuote .. "\",\n")  -- 使用quote的值并用双引号括起来    
-        file:write("    \"policy_ids\": []\n")  
-        file:write("}")  
+        file:write("    \"policy_ids\": []\n")
+        file:write("}")
         -- 关闭文件  
-        file:close()  
+        file:close()
         
     end
     
@@ -181,16 +181,16 @@ function ehsm.sdk_Createkey(plugin_conf)
     kong.response.set_header(plugin_conf.ehsm_id, ehsm_id)
     
     -- 运行python3 listkey.py指令，并将输出存储到临时文件中  
-    local cmd = "python3 /home/wydx/kong/kong/plugins/api-version/sdk/ehsm_CLI_createkey.py"  
+    local cmd = "python3 /home/wydx/kong/kong/plugins/api-version/sdk/ehsm_CLI_createkey.py"
     local keyid = io.popen(cmd):read("*all")  
     keyid = keyid:gsub("\n", "") -- 移除keyid字符串中所有的换行符  
     -- 打开文件  
-    local file = io.open("/home/wydx/kong/kong/plugins/api-version/data/keyid.txt", "w")  
-    if file then  
+    local file = io.open("/home/wydx/kong/kong/plugins/api-version/data/keyid.txt", "w")
+    if file then
         -- 写入数据  
         file:write(keyid .. "\n")  -- 写入appid  
         -- 关闭文件  
-        file:close()  
+        file:close()
     end
     kong.response.set_header(plugin_conf.modified_response, keyid)
 end
@@ -208,8 +208,8 @@ function ehsm.sdk_ListKey(plugin_conf)
     kong.response.set_header(plugin_conf.ehsm_id, ehsm_id)
 
     -- 运行python3 listkey.py指令，并将输出存储到临时文件中  
-    local cmd = "python3 /home/wydx/kong/kong/plugins/api-version/sdk/ehsm_CLI_listkey.py"  
-    local output = io.popen(cmd):read("*all")  
+    local cmd = "python3 /home/wydx/kong/kong/plugins/api-version/sdk/ehsm_CLI_listkey.py"
+    local output = io.popen(cmd):read("*all")
     output = output:gsub("\n", "") -- 移除字符串中所有的换行符  
     print(output)
     kong.response.set_header(plugin_conf.ehsm_response_in_body, output)
@@ -244,8 +244,8 @@ function ehsm.sdk_Encrypt(plugin_conf)
 
     -- 运行python3 listkey.py指令，并将输出存储到临时文件中  
     -- 构建完整的命令字符串，将 text 变量的值作为参数传递  
-    local cmd = "python3 /home/wydx/kong/kong/plugins/api-version/sdk/ehsm_CLI_encrypt.py " .. aad .. " " .. text_to_encrypt 
-    local output = io.popen(cmd,"r"):read("*all")  
+    local cmd = "python3 /home/wydx/kong/kong/plugins/api-version/sdk/ehsm_CLI_encrypt.py " .. aad .. " " .. text_to_encrypt
+    local output = io.popen(cmd,"r"):read("*all")
     output = output:gsub("\n", "") -- 移除字符串中所有的换行符  
     kong.response.set_header(plugin_conf.data_back, output)
     --[[ 
@@ -288,8 +288,8 @@ function ehsm.sdk_Decrypt(plugin_conf)
     kong.response.set_header(plugin_conf.aad, aad)
 
     -- 运行python3 listkey.py指令，并将输出存储到临时文件中  
-    local cmd = "python3 /home/wydx/kong/kong/plugins/api-version/sdk/ehsm_CLI_decrypt.py " .. aad .. " " .. text_to_decrypt 
-    local output = io.popen(cmd):read("*all")  
+    local cmd = "python3 /home/wydx/kong/kong/plugins/api-version/sdk/ehsm_CLI_decrypt.py " .. aad .. " " .. text_to_decrypt
+    local output = io.popen(cmd):read("*all")
     output = output:gsub("\n", "") -- 移除字符串中所有的换行符  
     kong.response.set_header(plugin_conf.data_back, output)
     --[[
@@ -310,7 +310,7 @@ function ehsm.test(plugin_conf)
         consumer = { id = "c77c50d2-5947-4904-9f37-fa36182a71a9" },
         key = "secret",
     })
-    entity, err = kong.db.keyauth_credentials:update({ 
+    entity, err = kong.db.keyauth_credentials:update({
         {id = "2b6a2022-770a-49df-874d-11e2bf2634f5" },
         key = "secret" ,
     })
@@ -321,7 +321,7 @@ function ehsm.test(plugin_conf)
     end
     kong.response.set_header(plugin_conf.ehsm_response_in_body, err)
     kong.response.set_header(plugin_conf.modified_response, "insert enroll success")
-    
+
     -- store appid and apikey in db
     -- seg 2
     --[[

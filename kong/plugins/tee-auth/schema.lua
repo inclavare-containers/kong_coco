@@ -2,7 +2,7 @@ local typedefs = require "kong.db.schema.typedefs"
 
 
 return {
-  name = "key-auth",
+  name = "tee-auth",
   fields = {
     { consumer = typedefs.no_consumer },
     { protocols = typedefs.protocols_http },
@@ -14,8 +14,20 @@ return {
               elements = typedefs.header_name,
               default = { "apikey" },
           }, },
-          { ehsm_response_in_body = typedefs.header_name { required = true, default = "ehsm_response_in_body" }, },
-          { cocoas_response_in_body = typedefs.header_name { required = true, default = "cocoas_response_in_body" }, },
+          { tee = { description = "tee env, and so length must be at least 10", type = "array",
+              required = true,
+              elements = typedefs.header_name,
+              default = { "tee" },
+          }, },
+          { response_test1 = typedefs.header_name { required = false, default = "response_test1" }, },
+          { response_test2 = typedefs.header_name { required = false, default = "response_test2" }, },
+          { response_test3 = typedefs.header_name { required = false, default = "response_test3" }, },
+          { response_test4 = typedefs.header_name { required = false, default = "response_test4" }, },
+          { response_test5 = typedefs.header_name { required = false, default = "response_test5" }, },
+          { response_test6 = typedefs.header_name { required = false, default = "response_test6" }, },
+          { response_test7 = typedefs.header_name { required = false, default = "response_test7" }, },
+          { response_test8 = typedefs.header_name { required = false, default = "response_test8" }, },
+          { response_test9 = typedefs.header_name { required = false, default = "response_test9" }, },
           { hide_credentials = { description = "An optional boolean value telling the plugin to show or hide the credential from the upstream service. If `true`, the plugin strips the credential from the request.", type = "boolean", required = true, default = false }, },
           { anonymous = { description = "An optional string (consumer UUID or username) value to use as an “anonymous” consumer if authentication fails. If empty (default null), the request will fail with an authentication failure `4xx`.", type = "string" }, },
           { key_in_header = { description = "If enabled (default), the plugin reads the request header and tries to find the key in it.", type = "boolean", required = true, default = true }, },
