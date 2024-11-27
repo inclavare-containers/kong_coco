@@ -67,8 +67,8 @@ start_kong_with_custom_plugins:
 	sleep 4
 	
 	# create service  
-	curl -i -s -X POST http://localhost:8001/services --data 'name=service1' --data 'url=https://server3.free.beeceptor.com'
-	curl -i -s -X POST http://localhost:8001/services --data 'name=service2' --data 'url=https://server3.free.beeceptor.com'
+	curl -i -s -X POST http://localhost:8001/services --data 'name=service1' --data 'url=http://host.docker.internal:5500'
+	curl -i -s -X POST http://localhost:8001/services --data 'name=service2' --data 'url=http://host.docker.internal:5500'
 	
 	# create route for service   
 	curl -i -X POST http://localhost:8001/services/service1/routes --data 'paths[]=/mock1' --data 'name=route1'
