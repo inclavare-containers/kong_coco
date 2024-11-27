@@ -1,200 +1,100 @@
-OS := $(shell uname | awk '{print tolower($$0)}')
-MACHINE := $(shell uname -m)
+SHELL := /bin/bash
 
-DEV_ROCKS = "busted 2.2.0" "busted-hjtest 0.0.5" "luacheck 1.1.2" "lua-llthreads2 0.1.6" "ldoc 1.5.0" "luacov 0.15.0"
-WIN_SCRIPTS = "bin/busted" "bin/kong" "bin/kong-health"
-BUSTED_ARGS ?= -v
-TEST_CMD ?= bin/busted $(BUSTED_ARGS)
+install_kong_stander_routine_docker:
+	docker network create kong-net || true
 
-BUILD_NAME ?= kong-dev
+	docker run -d --name kong-database \
+ --network=kong-net \
+ -p 5432:5432 \
+ -e "POSTGRES_USER=kong" \
+ -e "POSTGRES_DB=kong" \
+ -e "POSTGRES_PASSWORD=kongpass" \
+ postgres:13
 
-ifeq ($(OS), darwin)
-OPENSSL_DIR ?= $(shell brew --prefix)/opt/openssl
-GRPCURL_OS ?= osx
-YAML_DIR ?= $(shell brew --prefix)/opt/libyaml
-EXPAT_DIR ?= $(HOMEBREW_DIR)/opt/expat
-else
-OPENSSL_DIR ?= /usr
-GRPCURL_OS ?= $(OS)
-YAML_DIR ?= /usr
-EXPAT_DIR ?= $(LIBRARY_PREFIX)
-endif
+	docker run --rm --network=kong-net \
+ -e "KONG_DATABASE=postgres" \
+ -e "KONG_PG_HOST=kong-database" \
+ -e "KONG_PG_PASSWORD=kongpass" \
+ -e "KONG_PASSWORD=test" \
+ kong/kong-gateway:latest kong migrations bootstrap
 
-ifeq ($(MACHINE), aarch64)
-GRPCURL_MACHINE ?= arm64
-H2CLIENT_MACHINE ?= arm64
-else
-GRPCURL_MACHINE ?= $(MACHINE)
-H2CLIENT_MACHINE ?= $(MACHINE)
-endif
+	docker run -d --name kong-gateway \
+--network=kong-net \
+-e "KONG_DATABASE=postgres" \
+-e "KONG_PG_HOST=kong-database" \
+-e "KONG_PG_USER=kong" \
+-e "KONG_PG_PASSWORD=kongpass" \
+-e "KONG_PROXY_ACCESS_LOG=/dev/stdout" \
+-e "KONG_ADMIN_ACCESS_LOG=/dev/stdout" \
+-e "KONG_PROXY_ERROR_LOG=/dev/stderr" \
+-e "KONG_ADMIN_ERROR_LOG=/dev/stderr" \
+-e "KONG_ADMIN_LISTEN=0.0.0.0:8001" \
+-e "KONG_ADMIN_GUI_URL=http://localhost:8002" \
+-e KONG_LICENSE_DATA \
+-p 8000:8000 \
+-p 8443:8443 \
+-p 8001:8001 \
+-p 8444:8444 \
+-p 8002:8002 \
+-p 8445:8445 \
+-p 8003:8003 \
+-p 8004:8004 \
+kong/kong-gateway:latest
 
-ifeq ($(MACHINE), aarch64)
-BAZELISK_MACHINE ?= arm64
-else ifeq ($(MACHINE), x86_64)
-BAZELISK_MACHINE ?= amd64
-else
-BAZELISK_MACHINE ?= $(MACHINE)
-endif
+	sleep 4
 
-.PHONY: install dev \
-	lint test test-integration test-plugins test-all \
-	pdk-phase-check functional-tests \
-	fix-windows release wasm-test-filters
+	curl -i -X GET --url http://localhost:8001/services
 
-ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-KONG_SOURCE_LOCATION ?= $(ROOT_DIR)
-GRPCURL_VERSION ?= 1.8.5
-BAZLISK_VERSION ?= 1.19.0
-H2CLIENT_VERSION ?= 0.4.4
-BAZEL := $(shell command -v bazel 2> /dev/null)
-VENV = /dev/null # backward compatibility when no venv is built
+remove_kong_stander_routine:
+	docker kill kong-gateway || true
+	docker kill kong-database || true
+	docker container rm kong-gateway || true
+	docker container rm kong-database || true
+	docker network rm kong-net || true
 
-# Use x86_64 grpcurl v1.8.5 for Apple silicon chips
-ifeq ($(GRPCURL_OS)_$(MACHINE)_$(GRPCURL_VERSION), osx_arm64_1.8.5)
-GRPCURL_MACHINE = x86_64
-endif
+start_kong_with_custom_plugins:
+	# remove old
+	clear
+	curl -s https://get.konghq.com/quickstart | bash -s -- -d -a kong-quickstart
 
-PACKAGE_TYPE ?= deb
+	# build new image
+	docker build -t kong-gateway_my-plugin:3.8-0.0.1 .
+	
+	# start kong with custom plugin  
+	chmod +x quickstart && ./quickstart -r "" -i kong-gateway_my-plugin -t 3.8-0.0.1
+	# curl -Ls https://get.konghq.com/quickstart | bash -s -- -r "" -i kong-gateway_my-plugin -t 3.8-0.0.1
 
-bin/bazel:
-	@curl -s -S -L \
-		https://github.com/bazelbuild/bazelisk/releases/download/v$(BAZLISK_VERSION)/bazelisk-$(OS)-$(BAZELISK_MACHINE) -o bin/bazel
-	@chmod +x bin/bazel
+	sleep 4
+	
+	# create service  
+	curl -i -s -X POST http://localhost:8001/services --data 'name=service1' --data 'url=https://server3.free.beeceptor.com'
+	curl -i -s -X POST http://localhost:8001/services --data 'name=service2' --data 'url=https://server3.free.beeceptor.com'
+	
+	# create route for service   
+	curl -i -X POST http://localhost:8001/services/service1/routes --data 'paths[]=/mock1' --data 'name=route1'
+	curl -i -X POST http://localhost:8001/services/service2/routes --data 'paths[]=/mock2' --data 'name=route2'
+	
+	# Create a new consumer
+	curl -i -X POST http://localhost:8001/consumers/ --data 'username=consumer1'
 
-bin/grpcurl:
-	@curl -s -S -L \
-		https://github.com/fullstorydev/grpcurl/releases/download/v$(GRPCURL_VERSION)/grpcurl_$(GRPCURL_VERSION)_$(GRPCURL_OS)_$(GRPCURL_MACHINE).tar.gz | tar xz -C bin;
-	@$(RM) bin/LICENSE
+	# Assign the consumer a key 
+	curl -i -X POST http://localhost:8001/consumers/consumer1/key-auth --data 'key=eyJzdm4iOiIxIiwicmVwb3J0X2RhdGEiOiJkR1Z6ZEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT09In0'
 
-bin/h2client:
-	@curl -s -S -L \
-		https://github.com/Kong/h2client/releases/download/v$(H2CLIENT_VERSION)/h2client_$(H2CLIENT_VERSION)_$(OS)_$(H2CLIENT_MACHINE).tar.gz | tar xz -C bin;
-	@$(RM) bin/README.md
+	# add plugin to route
+	curl -i -s -X POST http://localhost:8001/routes/route1/plugins --data 'name=attest'
+	curl -i -X POST http://localhost:8001/routes/route2/plugins --data "name=tee-auth" --data "instance_name=tee-auth-route2" --data "config.key_names=apikey"
 
+	sleep 4
 
-check-bazel: bin/bazel
-ifndef BAZEL
-	$(eval BAZEL := bin/bazel)
-endif
-
-wasm-test-filters:
-	./scripts/build-wasm-test-filters.sh
-
-build-kong: check-bazel
-	$(BAZEL) build //build:kong --verbose_failures --action_env=BUILD_NAME=$(BUILD_NAME)
-
-build-venv: check-bazel
-	$(eval VENV := bazel-bin/build/$(BUILD_NAME)-venv.sh)
-
-	@if [ ! -e bazel-bin/build/$(BUILD_NAME)-venv.sh ]; then \
-		$(BAZEL) build //build:venv --verbose_failures --action_env=BUILD_NAME=$(BUILD_NAME); \
-	fi
-
-install-dev-rocks: build-venv
-	@. $(VENV) ;\
-	for rock in $(DEV_ROCKS) ; do \
-	  if luarocks list --porcelain $$rock | grep -q "installed" ; then \
-		echo $$rock already installed, skipping ; \
-	  else \
-		echo $$rock not found, installing via luarocks... ; \
-		LIBRARY_PREFIX=$$(pwd)/bazel-bin/build/$(BUILD_NAME)/kong ; \
-		luarocks install $$rock OPENSSL_DIR=$$LIBRARY_PREFIX CRYPTO_DIR=$$LIBRARY_PREFIX YAML_DIR=$(YAML_DIR) || exit 1; \
-	  fi \
-	done;
-
-dev: build-venv install-dev-rocks bin/grpcurl bin/h2client wasm-test-filters
-
-build-release: check-bazel
-	$(BAZEL) clean --expunge
-	$(BAZEL) build //build:kong --verbose_failures --config release
-
-package/deb: check-bazel build-release
-	$(BAZEL) build --config release :kong_deb
-
-package/apk: check-bazel build-release
-	$(BAZEL) build --config release :kong_apk
-
-package/rpm: check-bazel build-release
-	$(BAZEL) build --config release :kong_el8 --action_env=RPM_SIGNING_KEY_FILE --action_env=NFPM_RPM_PASSPHRASE
-	$(BAZEL) build --config release :kong_el7 --action_env=RPM_SIGNING_KEY_FILE --action_env=NFPM_RPM_PASSPHRASE
-	$(BAZEL) build --config release :kong_aws2	--action_env=RPM_SIGNING_KEY_FILE --action_env=NFPM_RPM_PASSPHRASE
-	$(BAZEL) build --config release :kong_aws2022 --action_env=RPM_SIGNING_KEY_FILE --action_env=NFPM_RPM_PASSPHRASE
-
-functional-tests: dev test
-
-install: dev
-	@$(VENV) luarocks make
-
-clean: check-bazel
-	$(BAZEL) clean
-	$(RM) bin/bazel bin/grpcurl bin/h2client
-
-expunge: check-bazel
-	$(BAZEL) clean --expunge
-	$(RM) bin/bazel bin/grpcurl bin/h2client
-
-lint: dev
-	@$(VENV) luacheck -q .
-	@!(grep -R -E -I -n -w '#only|#o' spec && echo "#only or #o tag detected") >&2
-	@!(grep -R -E -I -n -- '---\s+ONLY' t && echo "--- ONLY block detected") >&2
-
-update-copyright: build-venv
-	bash -c 'OPENSSL_DIR=$(OPENSSL_DIR) EXPAT_DIR=$(EXPAT_DIR) $(VENV) luajit $(KONG_SOURCE_LOCATION)/scripts/update-copyright'
-
-test: dev
-	@$(VENV) $(TEST_CMD) spec/01-unit
-
-test-integration: dev
-	@$(VENV) $(TEST_CMD) spec/02-integration
-
-test-plugins: dev
-	@$(VENV) $(TEST_CMD) spec/03-plugins
-
-test-all: dev
-	@$(VENV) $(TEST_CMD) spec/
-
-test-custom: dev
-ifndef test_spec
-	$(error test_spec variable needs to be set, i.e. make test-custom test_spec=foo/bar/baz_spec.lua)
-endif
-	@$(VENV) $(TEST_CMD) $(test_spec)
-
-pdk-phase-checks: dev
-	rm -f t/phase_checks.stats
-	rm -f t/phase_checks.report
-	PDK_PHASE_CHECKS_LUACOV=1 prove -I. t/01*/*/00-phase*.t
-	luacov -c t/phase_checks.luacov
-	grep "ngx\\." t/phase_checks.report
-	grep "check_" t/phase_checks.report
-
-fix-windows:
-	@for script in $(WIN_SCRIPTS) ; do \
-	  echo Converting Windows file $$script ; \
-	  mv $$script $$script.win ; \
-	  tr -d '\015' <$$script.win >$$script ; \
-	  rm $$script.win ; \
-	  chmod 0755 $$script ; \
-	done;
-
-# the following targets are kept for backwards compatibility
-# dev is renamed to dev-legacy
-remove:
-	$(warning 'remove' target is deprecated, please use `make dev` instead)
-	-@luarocks remove kong
-
-dependencies: bin/grpcurl bin/h2client
-	$(warning 'dependencies' target is deprecated, this is now not needed when using `make dev`, but are kept for installation that are not built by Bazel)
-
-	for rock in $(DEV_ROCKS) ; do \
-	  if luarocks list --porcelain $$rock | grep -q "installed" ; then \
-		echo $$rock already installed, skipping ; \
-	  else \
-		echo $$rock not found, installing via luarocks... ; \
-		luarocks install $$rock OPENSSL_DIR=$(OPENSSL_DIR) CRYPTO_DIR=$(OPENSSL_DIR) YAML_DIR=$(YAML_DIR) || exit 1; \
-	  fi \
-	done;
-
-install-legacy:
-	@luarocks make OPENSSL_DIR=$(OPENSSL_DIR) CRYPTO_DIR=$(OPENSSL_DIR) YAML_DIR=$(YAML_DIR)
-
-dev-legacy: remove install-legacy dependencies
+	# test attest plugin
+	# no config
+	curl -i http://localhost:8000/mock1
+	# get ng evidence
+	curl -i http://localhost:8000/mock1 -H 'ng_auth:true'
+	# attest service evidence
+	curl -i http://localhost:8000/mock1 -H 'api:service1'
+	# all func test
+	curl -i http://localhost:8000/mock1 -H 'api:service1' -H 'ng_auth:true'
+	
+	# test tee-auth plugin
+	curl -i http://localhost:8000/mock2 -H 'apikey:eyJzdm4iOiIxIiwicmVwb3J0X2RhdGEiOiJkR1Z6ZEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT09In0' -H 'tee:sample'
