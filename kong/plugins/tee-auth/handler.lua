@@ -249,21 +249,6 @@ local function do_authentication(conf)
     sink = ltn12.sink.table(response_body)
   }
 
-  -- debug info
-  local request_data_full = {
-    name = tableToString(consumer),
-    tee = "sample", 
-    evidence = tableToString(credential),
-    attesttype = "call"
-  }
-  local request_data = {
-    name = consumer.username,
-    tee = "sample",
-    evidence = credential.key,
-    attesttype = "call"
-  }
-  local request_str = json.encode(request_data)
-
   -- get response
   local response_data = json.decode(table.concat(response_body))
 
