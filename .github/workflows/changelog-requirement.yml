@@ -21,7 +21,7 @@ jobs:
 
       - name: Find changelog files
         id: changelog-list
-        uses: tj-actions/changed-files@716b1e13042866565e00e85fd4ec490e186c4a2f # 41.0.1
+        uses: tj-actions/changed-files@bab30c2299617f6615ec02a68b9a40d10bd21366 # 45.0.5
         with:
           files_yaml: |
             changelogs:
