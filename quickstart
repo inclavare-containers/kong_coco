@@ -982,12 +982,12 @@ main() {
     echo_fail "Docker is not available, check $LOG_FILE"; exit 1 
   }
 
-  if [ "$SKIP_KONG_START" != "true" ];
-  then
-    docker_pull_images && echo_pass "" || { 
-      echo_warn "Docker image download failed, check $LOG_FILE. Continuing...";
-    }
-  fi
+  # if [ "$SKIP_KONG_START" != "true" ];
+  # then
+  #   docker_pull_images && echo_pass "" || { 
+  #     echo_warn "Docker image download failed, check $LOG_FILE. Continuing...";
+  #   }
+  # fi
  
   if [ "$SKIP_KONG_START" != "true" ];
   then

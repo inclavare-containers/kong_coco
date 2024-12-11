@@ -30,7 +30,7 @@ function trustee_attest.access(plugin_conf)
 
     -- 获取 ng_evidence
     local ng_evidence
-    local ng_tee = "sample"
+    local ng_tee = "tdx"
     if ng_auth then
         -- 本地变量提供challenge值
         local challenge = "test" 

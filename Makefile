@@ -98,3 +98,33 @@ start_kong_with_custom_plugins:
 	
 	# test tee-auth plugin
 	curl -i http://localhost:8000/mock2 -H 'apikey:eyJzdm4iOiIxIiwicmVwb3J0X2RhdGEiOiJkR1Z6ZEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT09In0' -H 'tee:sample'
+
+kong_build: 
+	# remove old
+	clear
+	curl -s https://get.konghq.com/quickstart | bash -s -- -d -a kong-quickstart
+
+	# build new image
+	docker build -t kong-gateway_my-plugin:3.8-0.0.1 .
+
+	# start kong with custom plugin  
+	chmod +x ./quickstart && ./quickstart -r "" -i kong-gateway_my-plugin -t 3.8-0.0.1
+	# curl -Ls https://get.konghq.com/quickstart | bash -s -- -r "" -i kong-gateway_my-plugin -t 3.8-0.0.1
+
+	sleep 4
+	# start sample service
+	python3 /root/ActivatePro/Service/HelloService.py &
+
+	# create service  
+	curl -i -s -X POST http://localhost:8001/services --data 'name=ngattestservice' --data 'url=http://host.docker.internal:6005'
+	
+	# create route for service   
+	curl -i -X POST http://localhost:8001/services/ngattestservice/routes --data 'paths[]=/ngattestmock' --data 'name=ngattestroute'
+	
+	# add plugin to route
+	curl -i -s -X POST http://localhost:8001/routes/ngattestroute/plugins --data 'name=attest'
+
+	sleep 4
+
+	# all func test
+	curl -i http://localhost:8000/ngattestmock -H 'ng_auth:true'	
