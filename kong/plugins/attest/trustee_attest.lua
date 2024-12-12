@@ -30,7 +30,7 @@ function trustee_attest.access(plugin_conf)
 
     -- 获取 ng_evidence
     local ng_evidence
-    local ng_tee = "tdx"
+    local ng_tee = "csv"
     if ng_auth then
         -- 本地变量提供challenge值
         local challenge = "test" 
@@ -68,7 +68,9 @@ function trustee_attest.access(plugin_conf)
     end
 
     -- 获取 api_evidence
-    local api_evidence, api_tee,api_attest_status
+    local my_api_evidence
+    local my_api_tee
+    local my_api_attest_status
     if api then
         -- send curl
         local url = "http://host.docker.internal:5000/getevidence"
@@ -94,16 +96,16 @@ function trustee_attest.access(plugin_conf)
         local response_data = json.decode(table.concat(response_body))
 
         -- 提取evidence字段
-        api_attest_status = response_data.result.attest_status
+        my_api_attest_status = response_data.result.attest_status
 
-        if api_attest_status == "attested" then
-            api_evidence = response_data.result.evidence
-            api_tee = response_data.result.tee
-            kong.response.set_header(plugin_conf.api_evidence, api_evidence)
-            kong.response.set_header(plugin_conf.api_tee, api_tee)
-            kong.response.set_header(plugin_conf.api_attest_status, api_attest_status)
+        if my_api_attest_status == "attested" then
+            my_api_evidence = response_data.result.evidence
+            my_api_tee = response_data.result.tee
+            kong.response.set_header(plugin_conf.api_evidence, my_api_evidence)
+            kong.response.set_header(plugin_conf.api_tee, my_api_tee)
+            kong.response.set_header(plugin_conf.api_attest_status, my_api_attest_status)
         else
-            kong.response.set_header(plugin_conf.api_attest_status, api_attest_status)
+            kong.response.set_header(plugin_conf.api_attest_status, my_api_attest_status)
         end
     end
 end

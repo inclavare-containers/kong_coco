@@ -26,7 +26,7 @@ local schema = {
           }, },
           { ng_evidence = typedefs.header_name { required = false, default = "ng_evidence" }, },
           { ng_tee = typedefs.header_name { required = false, default = "ng_tee" }, },
-          { api_eidence = typedefs.header_name { required = false, default = "api_eidence" }, },
+          { api_evidence = typedefs.header_name { required = false, default = "api_evidence" }, },
           { api_tee = typedefs.header_name { required = false, default = "api_tee" }, },
           { api_attest_status = typedefs.header_name { required = false, default = "api_attest_status" }, },
           { attest_result = typedefs.header_name { required = false, default = "attest_result" }, },

@@ -227,16 +227,14 @@ local function do_authentication(conf)
 
   -- start tee-auth
 
-  -- send curl
-  local url = "http://host.docker.internal:5000/attest"
+  -- send readattest curl
+  local url = "http://host.docker.internal:5000/readattest"
   local payload = string.format([[
   {
     "name": "%s",
-    "tee": "%s",
-    "evidence": "%s",
-    "attesttype": "call"
+    "tee": "%s"
   }
-  ]], consumer.username, tee, credential.key)
+  ]], credential.key, tee)
   local response_body = {}
   local res, code, response_headers = http.request{
     url = url,
@@ -253,8 +251,8 @@ local function do_authentication(conf)
   local response_data = json.decode(table.concat(response_body))
 
   local attest_result = false
-  if response_data and response_data.response_type == "attest_response" and response_data.result then
-    attest_result = response_data.result.attest_result or false
+  if response_data and response_data.response_type == "readattest_response" and response_data.result then
+    attest_result = response_data.result.readattest_result or false
   end
 
   -- if attest fail
